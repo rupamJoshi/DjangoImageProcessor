@@ -1,0 +1,108 @@
+from django.shortcuts import render
+import datetime
+from django.http import*
+from django.core.files.storage import FileSystemStorage
+import uuid  
+import os
+import cv2
+from pathlib import Path
+def index(request):
+ print(request.session);
+ today=datetime.datetime.now()
+ return render(request,'index.html',{
+ "today":today.strftime("%d-%m=%Y")})
+
+def isFileOpen(request):
+ stack=request.session['stack']
+ if stack>0 and request.session.get('name')!=None and request.session.get('email')!=None:
+  return true
+  
+ else:
+  return false
+   
+	
+
+def getState(request):
+ if(isFileOpen):
+  fileName=request.session['stack'][0]
+  email=request.session['email']
+  name=request.session['name']
+  return JsonResponse({'state':'open','name':name,'email':email,'fileName':fileName})
+  
+ else:
+  return JsonResponse({'state':none,'name':'',email:'','fileName':''})	
+  
+  
+
+def openFile(request):
+ if request.method=='POST' and request.FILES['fileName']:
+  imageFile=request.FILES['fileName']
+  fs=FileSystemStorage()
+  imageFileName=fs.save(imageFile.name,imageFile)
+  stack=[]
+  stack.append(imageFileName)
+  
+  request.session['stack']=stack 
+  img=os.path.abspath(os.path.join(os.path.dirname(__file__),'..','filestore/%s'%imageFileName))
+  img=cv2.imread(img)
+  print(img.shape)
+  request.session['orisize']=img.shape
+  
+  request.session['email']=request.POST['email']
+  request.session['name']=request.POST.get('name')
+  	
+  return JsonResponse({'fileName':imageFileName})
+
+def getImage(request):
+ if request.method=="GET" and request.session.has_key('stack'):
+  stack=request.session['stack']
+ if len(stack)>0:
+  fileToServer=os.path.abspath(os.path.join(os.path.dirname(__file__),'..','filestore/%s'%stack[0]))
+  return FileResponse(open(fileToServer,'rb'))
+ return HttpResponse('')
+
+def closeFile(request):
+ if request.method=="GET" and request.session.has_key('stack'):
+  stack=request.session['stack']
+  for file in stack:
+   fileDelete=os.path.abspath(os.path.join(os.path.dirname(__file__),'..','filestore/%s'%file))
+   os.remove(fileDelete);
+  request.session.pop('stack')
+  request.session.pop('email')
+  request.session.pop('name')
+  return JsonResponse({'response':'closed'})
+ else:
+  return HttpResponse('');
+
+def undo(request):
+ if request.method=="GET" and request.session.has_key('stack') and len(request.session['stack'])>1:
+   stack=request.session['stack']
+   fileDelete=os.path.abspath(os.path.join(os.path.dirname(__file__),'..','filestore/%s'%stack.pop(0)))
+   os.remove(fileDelete);
+   request.session['stack']=stack;
+   return JsonResponse({"response":"undid"})
+ else:
+   return HttpResponse('')
+
+def toGrayscale(request):
+ if request.method=="GET" and request.session.has_key('stack'):
+  stack=request.session['stack']
+ if len(stack)>0:
+  fileAbsPath=os.path.abspath(os.path.join(os.path.dirname(__file__),'..','filestore/%s'%stack[0]));
+  grayscalefilepath=str(Path(fileAbsPath).with_suffix(''))+str(uuid.uuid4())+'.png' #here dirty coding......
+  grayImage=cv2.imread(fileAbsPath)
+  grayImage=cv2.cvtColor(grayImage,cv2.COLOR_BGR2GRAY)
+  cv2.imwrite(grayscalefilepath,grayImage)
+  gfilename=grayscalefilepath.split('/')[-1];
+  stack.insert(0,gfilename)
+  request.session['stack']=stack
+  return JsonResponse({'response':'convertedToGrayscale'}) 
+ else:
+  return HttpResponse()
+
+def scaleit():
+ if request.method=="POST" and resquest.session.has_key('stack'):
+  scale=request.POST['scale']
+  print(scale)
+ 
+ 
